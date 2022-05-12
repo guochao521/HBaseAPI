@@ -16,7 +16,7 @@ import static org.apache.commons.compress.utils.Lists.newArrayList;
 
 public class HBaseConnection implements Logger{
 
-//    private static Connection connection;
+    private static Connection connection;
 
     private static Connection MyHBaseConnection(String zkServer, String port) throws IOException {
 
@@ -24,7 +24,7 @@ public class HBaseConnection implements Logger{
         config.set("hbase.zookeeper.quorum", zkServer);
         config.set("hbase.zookeeper.property.clientPort", port);
 
-        Connection connection = ConnectionFactory.createConnection(config);
+        connection = ConnectionFactory.createConnection(config);
 //        System.out.println(connection);
 
         return connection;
@@ -86,7 +86,7 @@ public class HBaseConnection implements Logger{
                 try {
                     table.close();
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    logger.error("All Put ERROR：" + e);
                 }
             }
         }
@@ -97,6 +97,77 @@ public class HBaseConnection implements Logger{
         try {
             admin.getNamespaceDescriptor(namespaceName);
         } catch (NamespaceNotFoundException e) {
+            return false;
+        }
+        return true;
+    }
+
+
+    /**
+     * 删除指定行
+     */
+    public static boolean deleteRow(TableName tableName, String rowkey){
+        try {
+            Table table = connection.getTable(tableName);
+            Delete delete = new Delete(Bytes.toBytes(rowkey));
+            table.close();
+        } catch (IOException e){
+            logger.error("Delete Row ERROE：" + e);
+            return false;
+        }
+        return true;
+    }
+
+
+    /**
+     * 删除指定行的指定列
+     * @param tableName
+     * @param rowkey
+     * @param familyName
+     * @param qualifier
+     */
+    public static boolean deleteColumn(TableName tableName, String rowkey, String familyName, String qualifier){
+
+        try{
+            Table table = connection.getTable(tableName);
+            Delete delete = new Delete(Bytes.toBytes(rowkey));
+            delete.addColumn(Bytes.toBytes(familyName), Bytes.toBytes(qualifier));
+            table.delete(delete);
+            table.close();
+
+        } catch  (IOException e) {
+            logger.error("Delete Column ERROE：" + e);
+            return false;
+        }
+        return true;
+    }
+
+
+    /**
+     * 扫描表
+     * @param tableName
+     * @return
+     */
+    public static ResultScanner getScanner(TableName tableName){
+        try {
+            Table table = connection.getTable(tableName);
+            Scan scan = new Scan();
+            return table.getScanner(scan);
+        } catch (IOException e){
+            logger.error("Scan Table ERROE：" + e);
+            return null;
+        }
+    }
+
+
+    public static boolean deleteTable(TableName tableName){
+        try {
+            HBaseAdmin admin = (HBaseAdmin)connection.getAdmin();
+            // 删除表前需要先禁用表
+            admin.disableTable(tableName);
+            admin.deleteTable(tableName);
+        } catch (Exception e){
+            logger.error("Delete Table ERROE：" + e);
             return false;
         }
         return true;
@@ -137,7 +208,6 @@ public class HBaseConnection implements Logger{
             MyPut(connection, tableName,"Tom", column1, "class", "1");
             MyPut(connection, tableName,"Tom", column2, "understanding", "75");
             MyPut(connection, tableName,"Tom", column2, "programing", "82");
-
 //            List<String> rowKeyList = Arrays.asList("Tom", "Kary", "Ford");
 //            List<String> ageList = Arrays.asList("Tom", "Kary", "Ford");
 
@@ -151,7 +221,23 @@ public class HBaseConnection implements Logger{
             AllPut(connection, tableName, rowKeyList, column1, "class", classList);
             AllPut(connection, tableName, rowKeyList, column2, "understanding", underList);
             AllPut(connection, tableName, rowKeyList, column2, "programing", programList);
+
+
+            // 删除数据
+            String rowName = "Tom";
+            logger.info(String.format("Delete Data: [rowkey %s ] ", rowName));
+            if(deleteRow(tableName, rowName)){
+                logger.info(String.format("Delete Data: [rowkey %s ] finished", rowName));
+            }
+
+
+            String columnName = "class";
+            logger.info(String.format("Delete Data: [rowkey %s ] ", rowName));
+            if(deleteColumn(tableName, rowName, column1, columnName)){
+                logger.info(String.format("Delete Data: [rowkey %s, column %s] finished", rowName, columnName));
+            }
         }
+
     }
 
 
